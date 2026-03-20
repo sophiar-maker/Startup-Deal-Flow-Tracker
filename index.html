@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deal Flow Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #111827; }
+    input, select, textarea, button { font-family: inherit; }
+
+    /* Layout */
+    .header { background: #fff; border-bottom: 1px solid #f1f5f9; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .header-title { font-size: 20px; font-weight: 700; color: #111827; }
+    .header-sub { font-size: 13px; color: #6b7280; margin-top: 1px; }
+    .main { padding: 24px; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    /* Buttons */
+    .btn-primary { background: #4f46e5; color: #fff; border: none; padding: 9px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-outline { background: #fff; color: #4f46e5; border: 1.5px solid #c7d2fe; padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; width: 100%; }
+    .btn-outline:hover { background: #eef2ff; }
+    .btn-cancel { background: #fff; color: #6b7280; border: 1px solid #e5e7eb; padding: 8px 16px; border-radius: 10px; font-size: 14px; cursor: pointer; }
+    .btn-cancel:hover { background: #f9fafb; }
+
+    /* Pipeline cards */
+    .pipeline-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+    .pipeline-card { border-radius: 14px; padding: 12px; text-align: center; cursor: pointer; border: 2px solid transparent; transition: border-color .15s, box-shadow .15s; }
+    .pipeline-card.active { border-color: #6366f1; box-shadow: 0 2px 8px rgba(99,102,241,.2); }
+    .pipeline-card-count { font-size: 26px; font-weight: 800; line-height: 1; }
+    .pipeline-card-label { font-size: 11px; font-weight: 600; opacity: .75; margin-top: 3px; }
+
+    /* Stat cards */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .stat-card { background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #f1f5f9; }
+    .stat-label { font-size: 13px; color: #6b7280; }
+    .stat-value { font-size: 26px; font-weight: 800; color: #111827; margin-top: 4px; }
+    .stat-sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+    /* Filter bar */
+    .filter-bar { background: #fff; border-radius: 14px; border: 1px solid #f1f5f9; padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select { border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 12px; font-size: 13px; outline: none; background: #fff; color: #374151; }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+    .filter-bar input { flex: 1; min-width: 200px; }
+    .filter-count { font-size: 12px; color: #9ca3af; margin-left: auto; white-space: nowrap; }
+
+    /* Table */
+    .table-wrap { background: #fff; border-radius: 14px; border: 1px solid #f1f5f9; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+    th { padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; white-space: nowrap; user-select: none; }
+    th:hover { color: #6b7280; }
+    tbody tr { border-bottom: 1px solid #f9fafb; cursor: pointer; transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #eef2ff; }
+    td { padding: 12px 16px; color: #374151; vertical-align: middle; }
+    td .company-name { font-weight: 600; color: #111827; }
+    td .company-loc { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+    td .delete-btn { background: none; border: none; color: #d1d5db; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
+    td .delete-btn:hover { color: #ef4444; }
+    .empty-row td { text-align: center; padding: 48px; color: #9ca3af; }
+
+    /* Status badge */
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Modal */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal { background: #fff; border-radius: 20px; width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #f1f5f9; position: sticky; top: 0; background: #fff; z-index: 1; }
+    .modal-header h2 { font-size: 17px; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: #374151; }
+    .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; }
+    .section-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; }
+    .field-grid { display: grid; gap: 14px; }
+    .field-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .field-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .field-grid.cols-1 { grid-template-columns: 1fr; }
+    .field-grid.span-2 { grid-column: span 2; }
+    .field label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 5px; }
+    .field input, .field select, .field textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; color: #111827; background: #fff; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+    .field textarea { resize: none; }
+
+    /* Detail pane */
+    .pane-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.15); z-index: 40; display: flex; justify-content: flex-end; }
+    .pane { background: #fff; width: 100%; max-width: 400px; height: 100%; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,.1); display: flex; flex-direction: column; }
+    .pane-header { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
+    .pane-title { font-size: 17px; font-weight: 700; }
+    .pane-sub { font-size: 13px; color: #6b7280; margin-top: 2px; }
+    .pane-body { padding: 20px 24px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+    .pane-footer { padding: 16px 24px; border-top: 1px solid #f1f5f9; }
+    .detail-section-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+    .detail-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
+    .detail-row .key { color: #6b7280; }
+    .detail-row .val { color: #111827; font-weight: 500; }
+    .mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .mini-stat { background: #f8fafc; border-radius: 10px; padding: 10px; text-align: center; }
+    .mini-stat .ms-label { font-size: 11px; color: #6b7280; }
+    .mini-stat .ms-val { font-size: 14px; font-weight: 700; color: #111827; margin-top: 2px; }
+    .notes-box { background: #f8fafc; border-radius: 10px; padding: 12px; font-size: 13px; color: #374151; line-height: 1.6; }
+    .link-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 7px; text-decoration: none; transition: background .15s; }
+    .link-btn:hover { opacity: .85; }
+    .link-btn.linkedin { background: #e8f0fe; color: #1a56db; }
+    .link-btn.website { background: #f0fdf4; color: #15803d; }
+    .link-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    td .link-icon { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; text-decoration: none; margin-left: 4px; }
+    td .link-icon.li { background: #e8f0fe; color: #1a56db; }
+    td .link-icon.web { background: #f0fdf4; color: #15803d; }
+
+    /* Sheets sync UI */
+    .sync-bar { background: #eef2ff; border-bottom: 1px solid #e0e7ff; padding: 8px 24px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4338ca; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+    .sync-dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .btn-sm { background: none; border: 1px solid #c7d2fe; color: #4338ca; padding: 4px 10px; border-radius: 7px; font-size: 12px; cursor: pointer; }
+    .btn-sm:hover { background: #e0e7ff; }
+    .btn-danger-sm { border-color: #fecaca; color: #b91c1c; }
+    .btn-danger-sm:hover { background: #fee2e2; }
+    .setup-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: #f8fafc; }
+    .setup-card { background: #fff; border-radius: 20px; padding: 40px; max-width: 560px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .setup-step { display: flex; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #374151; align-items: flex-start; }
+    .setup-num { background: #4f46e5; color: #fff; border-radius: 50%; width: 20px; height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-top: 1px; }
+    .loading-overlay { display: flex; align-items: center; justify-content: center; padding: 64px; color: #9ca3af; font-size: 14px; gap: 10px; }
+    .spinner { width: 18px; height: 18px; border: 2px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+
+const STAGES = ["Pre-seed", "Seed", "Series A", "Series B+"];
+const SECTORS = ["SaaS", "Fintech", "Healthtech", "Consumer", "Deep Tech", "Climate", "Edtech", "Other"];
+const SOURCES = ["Network Referral", "Cold Inbound", "Accelerator", "Event / Conference", "VC Syndicate", "Social Media", "Other"];
+const STATUSES = ["Sourced", "Tracking", "Diligence", "Term Sheet", "Invested", "Rejected"];
+
+const STATUS_STYLE = {
+  Sourced:      { bg: "#f1f5f9", text: "#475569", dot: "#94a3b8" },
+  Tracking:     { bg: "#dbeafe", text: "#1d4ed8", dot: "#3b82f6" },
+  Diligence:    { bg: "#fef3c7", text: "#b45309", dot: "#f59e0b" },
+  "Term Sheet": { bg: "#ede9fe", text: "#6d28d9", dot: "#8b5cf6" },
+  Invested:     { bg: "#dcfce7", text: "#15803d", dot: "#22c55e" },
+  Rejected:     { bg: "#fee2e2", text: "#b91c1c", dot: "#f87171" },
+};
+
+const SAMPLE = [
+  { id:1, company:"Nexus AI", founder:"Alex Rivera", sector:"SaaS", stage:"Seed", location:"San Francisco, CA", checkSize:250000, valuation:8000000, roundSize:3000000, source:"Network Referral", sourceContact:"Jamie Chen", dateSourced:"2026-02-10", status:"Diligence", linkedin:"https://linkedin.com/company/nexus-ai", website:"https://nexusai.com", financialNotes:"ARR $400k, 20% MoM growth. Burn ~$80k/mo. 18mo runway. No debt.", notes:"Strong founding team, ex-Stripe engineers." },
+  { id:2, company:"GreenRoute", founder:"Maya Patel", sector:"Climate", stage:"Pre-seed", location:"Austin, TX", checkSize:100000, valuation:4000000, roundSize:1500000, source:"Accelerator", sourceContact:"YC W26", dateSourced:"2026-01-28", status:"Tracking", linkedin:"", website:"https://greenroute.io", financialNotes:"Pre-revenue. $2M in LOIs. Raising to reach first commercial contract.", notes:"Fleet electrification logistics. Strong pilot pipeline." },
+  { id:3, company:"Meridian Health", founder:"Dr. Lisa Chen, Marcus Wong", sector:"Healthtech", stage:"Series A", location:"Boston, MA", checkSize:500000, valuation:22000000, roundSize:8000000, source:"VC Syndicate", sourceContact:"Andreessen Health Fund", dateSourced:"2026-01-15", status:"Term Sheet", linkedin:"https://linkedin.com/company/meridian-health", website:"", financialNotes:"$3.2M ARR, 85% gross margin. NRR 120%. Burn $250k/mo, 14mo runway.", notes:"Remote patient monitoring. 300+ hospital clients. NPS 72." },
+  { id:4, company:"PocketLedger", founder:"Sam Torres", sector:"Fintech", stage:"Seed", location:"New York, NY", checkSize:200000, valuation:10000000, roundSize:4000000, source:"Cold Inbound", sourceContact:"", dateSourced:"2026-03-01", status:"Sourced", linkedin:"", website:"", financialNotes:"", notes:"B2B expense management for SMBs. Interesting unit economics." },
+  { id:5, company:"Luminary Learn", founder:"Priya Nair", sector:"Edtech", stage:"Pre-seed", location:"Remote", checkSize:75000, valuation:3000000, roundSize:800000, source:"Event / Conference", sourceContact:"SxSW 2026", dateSourced:"2026-03-08", status:"Sourced", linkedin:"", website:"", financialNotes:"", notes:"AI tutoring for K-12. Met founder at SxSW." },
+  { id:6, company:"QuantumShield", founder:"James Okafor", sector:"Deep Tech", stage:"Seed", location:"Seattle, WA", checkSize:300000, valuation:12000000, roundSize:5000000, source:"Network Referral", sourceContact:"David Park", dateSourced:"2025-12-01", status:"Rejected", linkedin:"https://linkedin.com/company/quantumshield", website:"https://quantumshield.io", financialNotes:"Pre-revenue. Gov contracts possible but long sales cycles. Burn $120k/mo.", notes:"Interesting tech but market timing feels early. Revisit in 12 months." },
+  { id:7, company:"Cassidy", founder:"Priya Mehta", sector:"SaaS", stage:"Seed", location:"New York, NY", checkSize:200000, valuation:9000000, roundSize:3500000, source:"Network Referral", sourceContact:"Priya Mehta", dateSourced:"2026-02-20", status:"Invested", linkedin:"https://linkedin.com/company/cassidy", website:"https://cassidy.ai", financialNotes:"$1.8M ARR at close. 2x rev in 6 months post-investment. 78% gross margin.", notes:"RevOps automation. Already closed." },
+];
+
+function fmt(val) {
+  const n = Number(val);
+  if (!val && val !== 0 || isNaN(n)) return "—";
+  if (n >= 1000000) return `$${(n/1000000).toFixed(1)}M`;
+  if (n >= 1000) return `$${(n/1000).toFixed(0)}K`;
+  return `$${n}`;
+}
+
+function Badge({ status }) {
+  const s = STATUS_STYLE[status] || STATUS_STYLE.Sourced;
+  return (
+    <span className="badge" style={{ background: s.bg, color: s.text }}>
+      <span className="badge-dot" style={{ background: s.dot }}></span>
+      {status}
+    </span>
+  );
+}
+
+const EMPTY = { company:"", founder:"", sector:"", stage:"", location:"", checkSize:"", valuation:"", roundSize:"", source:"", sourceContact:"", dateSourced:"", status:"Sourced", linkedin:"", website:"", financialNotes:"", notes:"" };
+
+function Field({ label, children, span2 }) {
+  return <div className="field" style={span2 ? { gridColumn: "span 2" } : {}}><label>{label}</label>{children}</div>;
+}
+
+function Modal({ deal, onSave, onClose }) {
+  const [f, setF] = useState(deal || EMPTY);
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const submit = (e) => { e.preventDefault(); if (!f.company.trim()) return; onSave(f); };
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <h2>{deal?.id ? "Edit Deal" : "Add New Deal"}</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="modal-body">
+            <div>
+              <div className="section-label">Company Info</div>
+              <div className="field-grid cols-2">
+                <Field label="Company Name *" span2>
+                  <input required value={f.company} onChange={e => set("company", e.target.value)} />
+                </Field>
+                <Field label="Founder(s)" span2>
+                  <input value={f.founder||""} onChange={e => set("founder", e.target.value)} placeholder="e.g. Jane Smith, John Doe" />
+                </Field>
+                <Field label="Sector">
+                  <select value={f.sector} onChange={e => set("sector", e.target.value)}>
+                    <option value="">Select...</option>
+                    {SECTORS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Stage">
+                  <select value={f.stage} onChange={e => set("stage", e.target.value)}>
+                    <option value="">Select...</option>
+                    {STAGES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Location" span2>
+                  <input value={f.location} onChange={e => set("location", e.target.value)} placeholder="City, State" />
+                </Field>
+                <Field label="LinkedIn URL" span2>
+                  <input value={f.linkedin||""} onChange={e => set("linkedin", e.target.value)} placeholder="https://linkedin.com/company/..." />
+                </Field>
+                <Field label="Website URL" span2>
+                  <input value={f.website||""} onChange={e => set("website", e.target.value)} placeholder="https://..." />
+                </Field>
+              </div>
+            </div>
+            <div>
+              <div className="section-label">Deal Details</div>
+              <div className="field-grid cols-3">
+                <Field label="My Check ($)">
+                  <input type="number" value={f.checkSize} onChange={e => set("checkSize", e.target.value)} placeholder="250000" />
+                </Field>
+                <Field label="Valuation ($)">
+                  <input type="number" value={f.valuation} onChange={e => set("valuation", e.target.value)} placeholder="8000000" />
+                </Field>
+                <Field label="Round Size ($)">
+                  <input type="number" value={f.roundSize} onChange={e => set("roundSize", e.target.value)} placeholder="3000000" />
+                </Field>
+              </div>
+            </div>
+            <div>
+              <div className="section-label">Sourcing Info</div>
+              <div className="field-grid cols-2">
+                <Field label="How Found">
+                  <select value={f.source} onChange={e => set("source", e.target.value)}>
+                    <option value="">Select...</option>
+                    {SOURCES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Source / Contact">
+                  <input value={f.sourceContact} onChange={e => set("sourceContact", e.target.value)} placeholder="Name or org" />
+                </Field>
+                <Field label="Date Sourced">
+                  <input type="date" value={f.dateSourced} onChange={e => set("dateSourced", e.target.value)} />
+                </Field>
+                <Field label="Pipeline Status">
+                  <select value={f.status} onChange={e => set("status", e.target.value)}>
+                    {STATUSES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </div>
+            <div>
+              <div className="section-label">Financial Notes</div>
+              <div className="field">
+                <textarea rows={3} value={f.financialNotes||""} onChange={e => set("financialNotes", e.target.value)} placeholder="Revenue, ARR, burn rate, runway, margins, cap table notes..." />
+              </div>
+            </div>
+            <div>
+              <div className="section-label">Notes</div>
+              <div className="field">
+                <textarea rows={3} value={f.notes} onChange={e => set("notes", e.target.value)} placeholder="Key observations, next steps, open questions..." />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-cancel" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn-primary">{deal?.id ? "Save Changes" : "Add Deal"}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DetailPane({ deal, onClose, onEdit }) {
+  return (
+    <div className="pane-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="pane">
+        <div className="pane-header">
+          <div>
+            <div className="pane-title">{deal.company}</div>
+            <div className="pane-sub">{[deal.stage, deal.sector].filter(Boolean).join(" · ")}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="pane-body">
+          <Badge status={deal.status} />
+          {(deal.linkedin || deal.website) && (
+            <div className="link-row">
+              {deal.linkedin && <a href={deal.linkedin} target="_blank" rel="noopener noreferrer" className="link-btn linkedin" onClick={e => e.stopPropagation()}>🔗 LinkedIn</a>}
+              {deal.website && <a href={deal.website} target="_blank" rel="noopener noreferrer" className="link-btn website" onClick={e => e.stopPropagation()}>🌐 Website</a>}
+            </div>
+          )}
+          <div>
+            <div className="detail-section-label">Company Info</div>
+            {[["Founder(s)", deal.founder], ["Location", deal.location], ["Stage", deal.stage], ["Sector", deal.sector]].map(([k,v]) => (
+              <div className="detail-row" key={k}><span className="key">{k}</span><span className="val">{v || "—"}</span></div>
+            ))}
+          </div>
+          <div>
+            <div className="detail-section-label">Deal Details</div>
+            <div className="mini-stats">
+              {[["My Check", fmt(deal.checkSize)], ["Valuation", fmt(deal.valuation)], ["Round Size", fmt(deal.roundSize)]].map(([l,v]) => (
+                <div className="mini-stat" key={l}><div className="ms-label">{l}</div><div className="ms-val">{v}</div></div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="detail-section-label">Sourcing Info</div>
+            {[["How Found", deal.source], ["Contact", deal.sourceContact], ["Date Sourced", deal.dateSourced]].map(([k,v]) => (
+              <div className="detail-row" key={k}><span className="key">{k}</span><span className="val">{v || "—"}</span></div>
+            ))}
+          </div>
+          {deal.financialNotes && (
+            <div>
+              <div className="detail-section-label">Financial Notes</div>
+              <div className="notes-box">{deal.financialNotes}</div>
+            </div>
+          )}
+          {deal.notes && (
+            <div>
+              <div className="detail-section-label">Notes</div>
+              <div className="notes-box">{deal.notes}</div>
+            </div>
+          )}
+        </div>
+        <div className="pane-footer">
+          <button className="btn-outline" onClick={() => onEdit(deal)}>Edit Deal</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem("dft_api_url") || "");
+  const [urlInput, setUrlInput] = useState("");
+  const [deals, setDeals] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [fStatus, setFStatus] = useState("All");
+  const [fSector, setFSector] = useState("All");
+  const [fStage, setFStage] = useState("All");
+  const [sortKey, setSortKey] = useState("dateSourced");
+  const [sortDir, setSortDir] = useState("desc");
+  const [modal, setModal] = useState(false);
+  const [editDeal, setEditDeal] = useState(null);
+  const [detail, setDetail] = useState(null);
+
+  useEffect(() => { if (apiUrl) loadDeals(); }, [apiUrl]);
+
+  const loadDeals = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl);
+      const data = await res.json();
+      setDeals(data.map(d => ({
+        ...d,
+        checkSize: d.checkSize ? Number(d.checkSize) : "",
+        valuation: d.valuation ? Number(d.valuation) : "",
+        roundSize: d.roundSize ? Number(d.roundSize) : "",
+      })));
+    } catch(e) {
+      alert("Could not connect to Google Sheets. Double-check your Web App URL.");
+    }
+    setLoading(false);
+  };
+
+  const apiPost = async (body) => {
+    await fetch(apiUrl, { method: "POST", mode: "no-cors", body: JSON.stringify(body) });
+    await new Promise(r => setTimeout(r, 900));
+    await loadDeals();
+  };
+
+  const connect = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    localStorage.setItem("dft_api_url", url);
+    setApiUrl(url);
+  };
+
+  const disconnect = () => {
+    if (!window.confirm("Disconnect from Google Sheets? Your deals will stay in the sheet.")) return;
+    localStorage.removeItem("dft_api_url");
+    setApiUrl(""); setDeals([]);
+  };
+
+  const counts = useMemo(() => {
+    const c = {}; STATUSES.forEach(s => c[s] = 0);
+    deals.forEach(d => { if (c[d.status] !== undefined) c[d.status]++; });
+    return c;
+  }, [deals]);
+
+  const deployed = useMemo(() =>
+    deals.filter(d => d.status === "Invested").reduce((s, d) => s + (Number(d.checkSize)||0), 0), [deals]);
+
+  const filtered = useMemo(() => {
+    let r = [...deals];
+    if (search) r = r.filter(d => d.company.toLowerCase().includes(search.toLowerCase()) || (d.sourceContact||"").toLowerCase().includes(search.toLowerCase()));
+    if (fStatus !== "All") r = r.filter(d => d.status === fStatus);
+    if (fSector !== "All") r = r.filter(d => d.sector === fSector);
+    if (fStage !== "All") r = r.filter(d => d.stage === fStage);
+    r.sort((a, b) => {
+      let av = a[sortKey]??"", bv = b[sortKey]??"";
+      if (["checkSize","valuation","roundSize"].includes(sortKey)) { av = Number(av)||0; bv = Number(bv)||0; }
+      return av < bv ? (sortDir==="asc"?-1:1) : av > bv ? (sortDir==="asc"?1:-1) : 0;
+    });
+    return r;
+  }, [deals, search, fStatus, fSector, fStage, sortKey, sortDir]);
+
+  const sort = (k) => { if (sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortKey(k); setSortDir("asc"); } };
+  const arr = (k) => sortKey===k ? (sortDir==="asc"?" ↑":" ↓") : "";
+
+  const save = async (form) => {
+    setSyncing(true);
+    if (form.id) {
+      await apiPost({ action: "update", deal: form });
+      if (detail?.id === form.id) setDetail(form);
+    } else {
+      await apiPost({ action: "add", deal: form });
+    }
+    setSyncing(false);
+    setModal(false); setEditDeal(null);
+  };
+
+  const edit = (deal) => { setEditDeal(deal); setModal(true); setDetail(null); };
+
+  const del = async (id, name) => {
+    if (!window.confirm(`Delete ${name}?`)) return;
+    setSyncing(true);
+    setDeals(ds => ds.filter(d => d.id !== id));
+    setDetail(null);
+    await apiPost({ action: "delete", id });
+    setSyncing(false);
+  };
+
+  // ── Setup screen ──────────────────────────────────────────
+  if (!apiUrl) {
+    return (
+      <div className="setup-wrap">
+        <div className="setup-card">
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Connect to Google Sheets</h1>
+          <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 24, lineHeight: 1.7 }}>
+            Your deals will live in a Google Sheet that everyone shares in real time. Setup takes about 2 minutes.
+          </p>
+          <div style={{ background: "#f8fafc", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Steps</p>
+            {[
+              "Go to sheets.google.com → create a new blank spreadsheet",
+              "Click Extensions → Apps Script in the top menu",
+              "Delete any existing code, then open deal-tracker-apps-script.gs from your Downloads and paste all the code",
+              "Click Save (💾 icon), then Deploy → New deployment",
+              "Set: Type = Web app · Execute as = Me · Who has access = Anyone → click Deploy",
+              "Copy the Web App URL that appears and paste it below"
+            ].map((s, i) => (
+              <div className="setup-step" key={i}>
+                <span className="setup-num">{i+1}</span>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input
+              value={urlInput} onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && connect()}
+              placeholder="Paste your Web App URL here..."
+              style={{ flex: 1, border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 13, outline: "none" }}
+            />
+            <button className="btn-primary" onClick={connect}>Connect</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main UI ───────────────────────────────────────────────
+  return (
+    <div>
+      <div className="header">
+        <div>
+          <div className="header-title">Deal Flow Tracker</div>
+          <div className="header-sub">Angel investor sourcing pipeline</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {syncing && <span style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}><span className="spinner"></span>Saving…</span>}
+          <button className="btn-sm" onClick={loadDeals} disabled={loading}>↻ Refresh</button>
+          <button className="btn-primary" onClick={() => { setEditDeal(null); setModal(true); }}>+ Add Deal</button>
+        </div>
+      </div>
+
+      <div className="sync-bar">
+        <span className={`sync-dot${syncing?" syncing":""}`}></span>
+        <span>Connected to Google Sheets</span>
+        <span style={{ marginLeft: "auto" }}>
+          <button className="btn-sm btn-danger-sm" onClick={disconnect}>Disconnect</button>
+        </span>
+      </div>
+
+      <div className="main">
+        <div className="pipeline-grid">
+          {STATUSES.map(s => {
+            const st = STATUS_STYLE[s];
+            return (
+              <div key={s} className={`pipeline-card${fStatus===s?" active":""}`}
+                style={{ background: st.bg }} onClick={() => setFStatus(fStatus===s?"All":s)}>
+                <div className="pipeline-card-count" style={{ color: st.text }}>{counts[s]}</div>
+                <div className="pipeline-card-label" style={{ color: st.text }}>{s}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="stats-grid">
+          {[
+            ["Total Deals", deals.length, "tracked"],
+            ["Active Pipeline", deals.filter(d=>!["Invested","Rejected"].includes(d.status)).length, "in progress"],
+            ["Investments", counts["Invested"], "completed"],
+            ["Deployed", fmt(deployed), "total capital"],
+          ].map(([l,v,s]) => (
+            <div className="stat-card" key={l}>
+              <div className="stat-label">{l}</div>
+              <div className="stat-value">{v}</div>
+              <div className="stat-sub">{s}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="filter-bar">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search company or contact..." />
+          {[["Status", fStatus, setFStatus, ["All",...STATUSES]], ["Sector", fSector, setFSector, ["All",...SECTORS]], ["Stage", fStage, setFStage, ["All",...STAGES]]].map(([lbl,val,setter,opts]) => (
+            <select key={lbl} value={val} onChange={e => setter(e.target.value)}>
+              {opts.map(o => <option key={o} value={o}>{o==="All"?`All ${lbl}s`:o}</option>)}
+            </select>
+          ))}
+          <span className="filter-count">{filtered.length} deal{filtered.length!==1?"s":""}</span>
+        </div>
+
+        <div className="table-wrap">
+          {loading ? (
+            <div className="loading-overlay"><span className="spinner"></span>Loading deals from Google Sheets…</div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    {[["company","Company"],["sector","Sector"],["stage","Stage"],["checkSize","My Check"],["valuation","Valuation"],["source","Source"],["dateSourced","Date"],["status","Status"]].map(([k,l]) => (
+                      <th key={k} onClick={() => sort(k)}>{l}{arr(k)}</th>
+                    ))}
+                    <th style={{ width: 32 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 && (
+                    <tr className="empty-row"><td colSpan={9}>{deals.length === 0 ? "No deals yet — click + Add Deal to get started." : "No deals match your filters."}</td></tr>
+                  )}
+                  {filtered.map(d => (
+                    <tr key={d.id} onClick={() => setDetail(d)}>
+                      <td>
+                        <div className="company-name">
+                          {d.company}
+                          {d.linkedin && <a href={d.linkedin} target="_blank" rel="noopener noreferrer" className="link-icon li" onClick={e => e.stopPropagation()}>in</a>}
+                          {d.website && <a href={d.website} target="_blank" rel="noopener noreferrer" className="link-icon web" onClick={e => e.stopPropagation()}>↗</a>}
+                        </div>
+                        {d.founder && <div className="company-loc">{d.founder}</div>}
+                        {d.location && <div className="company-loc">{d.location}</div>}
+                      </td>
+                      <td>{d.sector||"—"}</td>
+                      <td>{d.stage||"—"}</td>
+                      <td style={{ fontWeight: 600 }}>{fmt(d.checkSize)}</td>
+                      <td>{fmt(d.valuation)}</td>
+                      <td>{d.source||"—"}</td>
+                      <td>{d.dateSourced||"—"}</td>
+                      <td><Badge status={d.status} /></td>
+                      <td><button className="delete-btn" onClick={e => { e.stopPropagation(); del(d.id, d.company); }}>×</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {modal && <Modal deal={editDeal} onSave={save} onClose={() => { setModal(false); setEditDeal(null); }} />}
+      {detail && !modal && <DetailPane deal={detail} onClose={() => setDetail(null)} onEdit={edit} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
